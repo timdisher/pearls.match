@@ -1,0 +1,200 @@
+---
+title: "Effect of Characteristic Correlation on Matching Adjusted Indirect Comparisons (MAICs)"
+output:
+  prettydoc::html_pretty:
+    theme: leonids
+    css: "style.css"
+editor_options: 
+  chunk_output_type: console
+bibliography: references.bib
+---
+
+```{r setup, include=FALSE, echo = FALSE}
+knitr::opts_chunk$set(echo = FALSE, dev = "svg", warning = FALSE, message = FALSE)
+library(dplyr)
+library(WeightIt)
+library(cobalt)
+library(ggplot2)
+library(patchwork)
+library(purrr)
+library(forcats)
+cols <- c("#002F6C", "#ED8B00")
+```
+
+# Background
+
+One of my favourite parts of the work that I do is that I get the opportunity to field interesting questions from clients and colleagues around the world. One that came across my desk recently in build up to some matching adjusted indirect comparison (MAIC) presentations we are running was this:
+
+> "When conducting an MAIC, what happens if two of the patient characteristics we are adjusting for are negatively correlated. How is it possible to balance the means to those observed in the comparator?"
+
+This is an interesting question because the goal of MAIC is to re-weight your population to reproduce target summaries from a comparator where you have aggregate data only. For example you might want to re-weight your patients to match the mean of two continuous characteristics. But if those characteristics are negatively correlated, how are you able to do that? How could you increase the mean in both if increasing the mean of one implies decreasing the mean of the other?
+
+Our team had a quick discussion and decided on the intuition that a negative correlation should imply less overlap in the joint distribution of the characteristics which should mean that adjusting these variables leads to a larger loss in effective sample size. A quick search found a paper[@Schonberger2014] which seemed consistent with that explanation, but we also wanted to confirm for ourselves and think of ways tocommunicate our answer to an audience with a mixed background. In these cases, I always find myself reaching for a simple simulation experiment.
+
+# Data Simulation
+
+We want to replicate the scenario in question. Briefly that means:
+
+1.  We have two single arm studies with two patient characteristics each
+2.  The characteristics are negatively correlated within studies
+3.  The means of the covariates are both higher in one study
+4.  We want to use a method that matches those means exactly
+
+We can accomplish the first three of these by simulating 2 studies with characteristics drawn from a multivariate normal distribution with different means. For the sake of exploration we'll look at a variety of potential correlations. Graphing the raw data will tell us a lot about the answer, but I've also included some standard diagnostics from the entropy balance routine included in the `{WeightIt}` package. Entropy balancing weights will be equivalent to those from the MAIC approach [@phillippo2020equivalence], but the `{WeightIt}` package has a nice interface to work with.
+
+```{r sim-data, echo = FALSE}
+
+############################################################################## #
+############################################################################## #
+#
+# 1. Create simulation function----
+#
+#     Section Notes
+# 
+# Creates a function to simulate correlated data with the desired structure
+# and puts into the required format
+#
+############################################################################## #
+############################################################################## #
+
+.sim.dat <- function(cor){
+ #' Creates two single arm studies with two continuous patient characteristics each. 
+ #' Characteristics are correlated according to cor. Average treatment effect on the
+ #' treated is calculated using ebal.
+ #'
+ #' @param cor value between -1 and 1 that expresses correlation between characteristics 
+ #'
+ #' @return a balance plot to show the method worked and the weighted data frame
+
+  sd <- c(2,2) # Standard deviations for each characteristic
+  mu1 <- c(0,0) # vector of means for study 1
+  mu2 <- c(2,2) # vector of means for study 2
+  n <- 10000 # N in each trial (large to make life easy)
+  cor.mat <- diag(2) # 2x2 identity matrix
+  cor.mat[lower.tri(cor.mat)] <- cor.mat[upper.tri(cor.mat)] <- cor # add correlations
+
+  S <- diag(sd) %*% cor.mat %*% diag(sd) # Convert to covariance
+
+
+  t1 <- MASS::mvrnorm(n = 1000, mu = mu1, Sigma = S) %>%
+  as.data.frame() %>%
+  dplyr::mutate(t = 0)
+
+  t2 <- MASS::mvrnorm(n = 1000, mu = mu2, Sigma = S) %>%
+  as.data.frame() %>%
+  dplyr::mutate(t =1)
+
+
+  dat <- rbind(t1, t2)
+ 
+
+  w1 <- weightit(t ~ V1 + V2, method = "ebal",estimand = "ATC", data = dat, verbose = FALSE)
+  s.w1 <- summary(w1)
+  ess <- round(sum(s.w1$effective.sample.size[2,]))
+  
+  bal.plot <- 
+    love.plot(w1) + scale_fill_manual(aesthetics = "color", values = cols) +
+  labs(title =  glue::glue("Covariate balance pre and post adjustment for correlation {cor}")) +
+    theme_minimal(base_size = 16)
+ 
+
+  dat <- dat %>% dplyr::mutate(ess = ess,
+                      cor = cor,
+                      w = w1$weights)
+  return(lst(dat, bal.plot))
+
+  }
+
+
+############################################################################## #
+############################################################################## #
+#
+# 2. Iterate over correlations ----
+#
+#     Section Notes
+#
+# Iterate over a range of correlations from strongly negative to strongly positive.
+# Make a scatterplot of the data for each set and annotate it with the ESS from the
+# respective model.
+############################################################################## #
+############################################################################## #
+
+cor <- seq(from = -0.7, to = 0.7, length.out = 6) #
+dat.list <-  map(set_names(cor), .sim.dat)
+ 
+p.dat <- map(dat.list, "dat") %>%
+  bind_rows() %>%
+  arrange(cor) %>%
+  mutate(lab = glue::glue("Correlation: {cor} | ESS: {ess}"),
+         lab = forcats::as_factor(as.character(lab)))
+
+
+
+
+  
+
+```
+
+An initial summary table can help us to see that as expected we were able to match the means exactly even in the extreme case of `r min(cor)` correlation.
+
+```{r}
+un <- dat.list[[1]]$dat %>%
+  dplyr::group_by(t) %>%
+  dplyr::summarise(across(c(V1,V2), ~round(mean(.),2))) %>%
+  mutate(type = "unadjusted")
+
+adj <- dat.list[[1]]$dat %>%
+  dplyr::group_by(t) %>%
+  dplyr::summarise(across(c(V1,V2),~ round(weighted.mean(., w),2))) %>%
+  mutate(type = "adjusted")
+
+rbind(un, adj) %>%
+ tidyr::pivot_wider(names_from = type, values_from = c("V1", "V2"))%>%
+  set_names(c("Treatment", "X1 Unadjusted", "X1 Adjusted", "X2 Unadjusted", "X2 Adjusted")) %>%
+  flextable::flextable() %>%
+  flextable::theme_zebra()
+
+```
+
+Despite that, a scatter plot of the joint distribution of X1 vs X2 illustrates how negative correlations have a smaller area of overlap between the two treatments. This can also be seen in the effective sample size diagnostic, which can be interpreted as a single number summary that helps us to assess the degree of overlap in our populations.
+
+```{r fig.width = 10}
+cor.plot <- p.dat %>%
+  ggplot(aes(x = V1, y = V2, colour = factor(t))) +
+  geom_point() +
+  scale_fill_manual(aesthetics = "color", values = cols) +
+  labs(title =  "Pairwise Plots of simulated patient characteristics with varying correlations",
+       subtitle = "Original Sample size: 2000",
+       colour = "Treatment",
+       x = "X1",
+       y = "X2") +
+    theme_minimal(base_size = 16) +
+  facet_wrap(~ lab)
+
+
+
+cor.plot
+```
+
+We see from the pairwise plots that ESS decreases as correlation becomes more negative, and generally increases with positive correlation. We can look at this relationship directly with a quick plot of a simple regression model. We find that in this particular example there is a slightly non-linear relationship between correlation and effective sample size.
+
+```{r }
+ess.cor.plot <- p.dat %>% distinct(ess, cor) %>%
+  ggplot(aes(x = cor, y = ess)) +
+  geom_smooth(se = FALSE, colour = cols[[1]],
+              method = "lm", formula = "y ~ poly(x, 2)") +
+  geom_point(size = 4, colour = cols[[2]])  +
+  theme_minimal(base_size = 16) +
+  labs(title = "ESS vs Correlation",
+       y = "Effective Sample Size (ESS)",
+       x = "Correlation") +
+  scale_x_continuous(breaks = cor)
+
+ess.cor.plot
+```
+
+# Conclusions
+
+In this example we were able to work through an intuition for how negative correlation between adjustment characteristics might affect MAIC results. We found that negative correlations are associated with less overlap in the joint distribution of covariates which leads to lower effective sample size.
+
+# References

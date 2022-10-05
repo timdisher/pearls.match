@@ -42,7 +42,7 @@ We want to replicate the scenario in question. Briefly that means:
 
 We can accomplish the first three of these by simulating 2 studies with characteristics drawn from a multivariate normal distribution with different means. For the sake of exploration we'll look at a variety of potential correlations. Graphing the raw data will tell us a lot about the answer, but I've also included some standard diagnostics from the entropy balance routine included in the `{WeightIt}` package. Entropy balancing weights will be equivalent to those from the MAIC approach [@phillippo2020equivalence], but the `{WeightIt}` package has a nice interface to work with.
 
-```{r sim-data, echo = FALSE}
+```{r sim-data, echo = TRUE}
 
 ############################################################################## #
 ############################################################################## #

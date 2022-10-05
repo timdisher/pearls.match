@@ -29,7 +29,7 @@ One of my favourite parts of the work that I do is that I get the opportunity to
 
 This is an interesting question because the goal of MAIC is to re-weight your population to reproduce target summaries from a comparator where you have aggregate data only. For example you might want to re-weight your patients to match the mean of two continuous characteristics. But if those characteristics are negatively correlated, how are you able to do that? How could you increase the mean in both if increasing the mean of one implies decreasing the mean of the other?
 
-Our team had a quick discussion and decided on the intuition that a negative correlation should imply less overlap in the joint distribution of the characteristics which should mean that adjusting these variables leads to a larger loss in effective sample size. A quick search found a paper[@Schonberger2014] which seemed consistent with that explanation, but we also wanted to confirm for ourselves and think of ways tocommunicate our answer to an audience with a mixed background. In these cases, I always find myself reaching for a simple simulation experiment.
+Our team had a quick discussion and decided on the intuition that if both means were either higher or lower than those in the trial with individual participant data (IPD) a negative correlation should imply less overlap in the joint distribution of the characteristics which should mean that adjusting these variables leads to a larger loss in effective sample size. A quick search found a paper[@Schonberger2014] which seemed consistent with that explanation, but we also wanted to confirm for ourselves and think of ways to communicate our answer to an audience with a mixed background. In these cases, I always find myself reaching for a simple simulation experiment.
 
 # Data Simulation
 
@@ -195,6 +195,6 @@ ess.cor.plot
 
 # Conclusions
 
-In this example we were able to work through an intuition for how negative correlation between adjustment characteristics might affect MAIC results. We found that negative correlations are associated with less overlap in the joint distribution of covariates which leads to lower effective sample size.
+In this example we were able to work through an intuition for how negative correlation between adjustment characteristics might affect MAIC results when the means for both comparators are higher or lower than those in the study with IPD. We found that negative correlations are associated with less overlap in the joint distribution of covariates which leads to lower effective sample size. This does not mean that this relationship is true in all scenarios. For example, if one mean was higher and the other lower then judging by patterns in the pairs plot we would expect to see the opposite trend (higher ESS with negative correlation).
 
 # References

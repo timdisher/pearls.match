@@ -69,18 +69,18 @@ We can accomplish the first three of these by simulating 2 studies with characte
   sd <- c(2,2) # Standard deviations for each characteristic
   mu1 <- c(0,0) # vector of means for study 1
   mu2 <- c(2,2) # vector of means for study 2
-  n <- 10000 # N in each trial (large to make life easy)
+  n <- 1000 # N in each trial (large to make life easy)
   cor.mat <- diag(2) # 2x2 identity matrix
   cor.mat[lower.tri(cor.mat)] <- cor.mat[upper.tri(cor.mat)] <- cor # add correlations
 
   S <- diag(sd) %*% cor.mat %*% diag(sd) # Convert to covariance
 
 
-  t1 <- MASS::mvrnorm(n = 1000, mu = mu1, Sigma = S) %>%
+  t1 <- MASS::mvrnorm(n = n, mu = mu1, Sigma = S) %>%
   as.data.frame() %>%
   dplyr::mutate(t = 0)
 
-  t2 <- MASS::mvrnorm(n = 1000, mu = mu2, Sigma = S) %>%
+  t2 <- MASS::mvrnorm(n = n, mu = mu2, Sigma = S) %>%
   as.data.frame() %>%
   dplyr::mutate(t =1)
 

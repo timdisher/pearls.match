@@ -10,6 +10,7 @@
 !*.Rmd
 !*.css
 !*.bib
+!*.html
 !*.Rproj
 !*.Rprofile
 !*DESCRIPTION
